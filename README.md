@@ -31,8 +31,8 @@ Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgı
 
 ```bash
 # Depoyu klonlayın
-git clone [https://github.com/AybarsBarut/Anayasa_Ai.git](https://github.com/AybarsBarut/Anayasa_Ai.git)
-cd Anayasa_Ai
+git clone [https://github.com/AybarsBarut/AnayasalRAGai.git](https://github.com/AybarsBarut/AnayasalRAGai.git)
+cd AnayasalRAGai
 
 # Sanal ortam oluşturun ve aktif edin
 python -m venv venv
