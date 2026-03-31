@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anayasa AI | Akıllı Asistan</title>
+    <!-- Google Fonts for Modern Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-wrapper">
+        <header class="glass-header">
+            <div class="logo-container">
+                <div class="logo-icon">⚖️</div>
+                <h1>Anayasa AI</h1>
+            </div>
+            <p class="subtitle">Türkiye Cumhuriyeti Anayasasına Göre Yasal Asistan (2026)</p>
+        </header>
+
+        <main class="chat-container glass-panel">
+            <div id="chat-box" class="chat-box">
+                <!-- Initial Assistant Message -->
+                <div class="message assistant">
+                    <div class="avatar">AI</div>
+                    <div class="msg-content">
+                        Merhaba, ben Anayasa AI. Sana güncel (2026) Türkiye Cumhuriyeti Anayasası maddelerine göre yol göstermek için buradayım. Bana ne sormak istersin?
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loader -->
+            <div id="loader" class="loader-container hidden">
+                <div class="typing-indicator">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <textarea id="user-input" placeholder="Anayasa hakkında bir soru sorun..." rows="1"></textarea>
+                <button id="send-btn" title="Gönder">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                    </svg>
+                </button>
+            </div>
+        </main>
+
+        <footer class="footer-disclaimer">
+            <p><strong>Yasal Uyarı:</strong> Anayasa AI, büyük dil modelleri kullanılarak çalıştırılan bir yapay zeka deneyidir. Verdiği yanıtlar hatalı, eksik veya yanıltıcı olabilir. Lütfen güncel yasaları ve mevzuatı her zaman <a href="https://www.resmigazete.gov.tr/" target="_blank">Resmî Gazete</a> ve profesyonel adli yetkililerden teyit ediniz.</p>
+        </footer>
+    </div>
+
+    <!-- Simple script for basic Markdown to HTML parsing and interactions -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

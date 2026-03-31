@@ -9,6 +9,9 @@ env/
 ENV/
 .env
 
+# Vector DB & Data
+chroma_db_tr/
+
 # IDEs
 .vscode/
 .idea/
