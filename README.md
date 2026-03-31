@@ -37,3 +37,6 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Bağımlılıkları yükleyin
 pip install -r requirements.txt
+
+### UYARI!
+Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere soramnız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
