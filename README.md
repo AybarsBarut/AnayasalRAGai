@@ -3,7 +3,7 @@
 Bu depo, Türkiye Cumhuriyeti Anayasası'nın (1982) tüm değişiklikleri içeren en güncel metnini yapılandırılmış bir formatta sunar ve bu metin üzerinde çalışan gelişmiş bir **RAG (Retrieval-Augmented Generation)** hukuk asistanı içerir.
 
 ### UYARI!
-Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere soramnız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
+Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere sormanız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
 
 ## Öne Çıkan Özellikler
 
