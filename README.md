@@ -2,6 +2,9 @@
 
 Bu depo, Türkiye Cumhuriyeti Anayasası'nın (1982) tüm değişiklikleri içeren en güncel metnini yapılandırılmış bir formatta sunar ve bu metin üzerinde çalışan gelişmiş bir **RAG (Retrieval-Augmented Generation)** hukuk asistanı içerir.
 
+### UYARI!
+Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere soramnız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
+
 ## Öne Çıkan Özellikler
 
 - **Anayasa AI Asistanı**: Ollama (Llama3) ve BGE-M3 embedding modelleriyle çalışan, %100 yerel ve gizlilik odaklı hukuk asistanı.
@@ -37,6 +40,5 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Bağımlılıkları yükleyin
 pip install -r requirements.txt
+```bash
 
-### UYARI!
-Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere soramnız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
