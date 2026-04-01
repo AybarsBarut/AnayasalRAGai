@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage('bot', data.answer);
         } catch (error) {
             loader.classList.add('hidden');
-            appendMessage('bot', `⚠️ Hata: ${error.message} - Sistem şu anda çevrimdışı veya yükleniyor olabilir.`);
+            appendMessage('bot', `Hata: ${error.message} - Sistem şu anda çevrimdışı veya yükleniyor olabilir.`);
         }
     }
 
