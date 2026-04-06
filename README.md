@@ -5,6 +5,9 @@ Bu depo, Türkiye Cumhuriyeti Anayasası'nın (1982) tüm değişiklikleri içer
 ### UYARI!
 Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere sormanız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
 
+<img width="800" height="600" alt="anaysalragai" src="https://github.com/user-attachments/assets/3fc13fde-b08a-4403-b5ea-8d6def782649" />
+
+
 ## Öne Çıkan Özellikler
 
 - **Anayasa AI Asistanı**: Ollama (Llama3) ve BGE-M3 embedding modelleriyle çalışan, %100 yerel ve gizlilik odaklı hukuk asistanı.
