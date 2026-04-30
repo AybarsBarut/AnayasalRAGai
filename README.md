@@ -1,47 +1,40 @@
-# Türkiye Cumhuriyeti Anayasası (Expert AI & Repo)
+# AnayasalRAGai - Turkish Constitution RAG Assistant
 
-Bu depo, Türkiye Cumhuriyeti Anayasası'nın (1982) tüm değişiklikleri içeren en güncel metnini yapılandırılmış bir formatta sunar ve bu metin üzerinde çalışan gelişmiş bir **RAG (Retrieval-Augmented Generation)** hukuk asistanı içerir.
+![type](https://img.shields.io/badge/type-AI%20%2F%20RAG%20system-blue) ![tech](https://img.shields.io/badge/tech-Python%20%2F%20FastAPI%20%2F%20Ollama-black) ![status](https://img.shields.io/badge/status-active-green)
 
-### UYARI!
-Temelde bir yapay zeka modeli olduğu için hep doğru cevap vereceği yanılgısına kapılmayıp asıl sorularınızı yetkili kişilere sormanız tavsiye edilir (Avukatlar,Hakimler,Savcılar...vb).
+**AnayasalRAGai - Turkish Constitution RAG Assistant** is a Retrieval-Augmented Generation system focused on the Constitution of the Republic of Turkiye, combining structured legal data, semantic search, and local AI assistance.
 
-<img width="800" height="600" alt="anaysalragai" src="https://github.com/user-attachments/assets/3fc13fde-b08a-4403-b5ea-8d6def782649" />
+Designed for AI developers, legaltech builders, Turkish law researchers, RAG system designers, and students experimenting with trustworthy document-grounded assistants.
 
+## Features
 
-## Öne Çıkan Özellikler
+- Local-first RAG workflow for Turkish constitutional text.
+- Hybrid retrieval using keyword and vector search concepts.
+- Structured Markdown and JSON legal data for machine-readable workflows.
+- FastAPI backend foundation for legal question answering.
+- Prompting strategy designed to stay close to the source context.
+- Useful reference project for Turkish NLP, legal AI, and retrieval pipelines.
 
-- **Anayasa AI Asistanı**: Ollama (Llama3) ve BGE-M3 embedding modelleriyle çalışan, %100 yerel ve gizlilik odaklı hukuk asistanı.
-- **Sıfır Halüsinasyon (Zero-Hallucination)**: 3 katmanlı prompt mimarisi ve bağımsız doğrulayıcı (validator) modeli ile sadece anayasa bağlamına sadık cevaplar.
-- **Hibrit Arama**: BM25 (anahtar kelime) ve ChromaDB (vektörel) algoritmalarını birleştiren yüksek hassasiyetli erişim mekanizması.
-- **Yapılandırılmış Veri**: Tüm anayasa hem Markdown hem de hiyerarşik JSON formatında sunulmaktadır.
+## Installation
 
-## Depo Yapısı
+Install Python 3.10+, install requirements with `pip install -r requirements.txt`, and prepare the required local model/runtime such as Ollama if used by your setup.
 
-- `backend/`: FastAPI tabanlı RAG motoru ve API uç noktaları.
-- `frontend/`: AI asistanı için web arayüzü.
-- `docs/`: Anayasanın bölümlere ayrılmış Markdown (.md) metinleri.
-- `data/`: Anayasa maddelerinin hiyerarşik JSON veri seti.
-- `scripts/`: Veri işleme ve temel arama araçları.
+## Usage
 
-## Kurulum ve Kullanım
+Run the backend or scripts included in the repository, index the constitution data, then query the assistant through the provided API or UI workflow.
 
-### 1. Gereksinimler
+## Notes
 
-- Python 3.10+
-- [Ollama](https://ollama.com/) (Llama3 modelinin yüklü olması gerekir: `ollama run llama3`)
+This project is an educational and research tool. It is not legal advice; always verify legal questions with qualified professionals and official sources.
 
-### 2. Kurulum
+## SEO Keywords
 
-```bash
-# Depoyu klonlayın
-git clone [https://github.com/AybarsBarut/AnayasalRAGai.git](https://github.com/AybarsBarut/AnayasalRAGai.git)
-cd AnayasalRAGai
+Turkish Constitution RAG, Anayasa AI assistant, legal RAG system, Turkish legaltech AI, retrieval augmented generation Python, FastAPI RAG, Ollama legal assistant, Turkiye Cumhuriyeti Anayasasi AI
 
-# Sanal ortam oluşturun ve aktif edin
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+## GitHub Topics
 
-# Bağımlılıkları yükleyin
-pip install -r requirements.txt
-```bash
+`ai`, `rag`, `legaltech`, `turkish-constitution`, `python`, `fastapi`, `ollama`, `nlp`
 
+## Repository
+
+[View on GitHub](https://github.com/AybarsBarut/AnayasalRAGai)
