@@ -16,6 +16,17 @@ from langchain_core.prompts import (
 )
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+try:
+    from langchain.retrievers.document_compressors import ContextualCompressionRetriever
+except ImportError:
+    from langchain_classic.retrievers import ContextualCompressionRetriever
+import re
+
+try:
+    from backend.exceptions import ConstitutionalError
+except ImportError:
+    from exceptions import ConstitutionalError
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "constitution.json")
 VECTOR_DB_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chroma_db_tr")
@@ -34,8 +45,8 @@ class AnayasaRAG:
         )
         
         # Load VectorDB and Create BM25 Index
-        # Automated expert upgrade: Delete old DBs using old embeddings
-        db_version_file = os.path.join(VECTOR_DB_DIR, "expert_v1.lock")
+        # Automated expert upgrade: Delete old DBs using old embeddings or indexing logic
+        db_version_file = os.path.join(VECTOR_DB_DIR, "expert_v2.lock")
         if os.path.exists(VECTOR_DB_DIR) and not os.path.exists(db_version_file):
             print("Old indexing detected. Re-indexing for expert upgrade...")
             import shutil
@@ -55,16 +66,23 @@ class AnayasaRAG:
             self.vector_db, self.bm25_retriever = self._create_db()
             # Create a flag file to prevent future re-indexing unless needed
             with open(db_version_file, "w") as f:
-                f.write("Expert Upgrade v1 - BGE-M3 Embeddings")
+                f.write("Expert Upgrade v2 - Contextual Chunking")
 
         # Configure retrievers
-        self.bm25_retriever.k = 2
-        self.chroma_retriever = self.vector_db.as_retriever(search_kwargs={"k": 2})
+        self.bm25_retriever.k = 10
+        self.chroma_retriever = self.vector_db.as_retriever(search_kwargs={"k": 10})
         
         # Ensemble Retriever (RRF - Reciprocal Rank Fusion)
         self.ensemble_retriever = EnsembleRetriever(
             retrievers=[self.bm25_retriever, self.chroma_retriever],
             weights=[0.3, 0.7] # Prioritize vector but use BM25 for keyword hits
+        )
+
+        # Expert Upgrade: Flashrank Reranker (CPU friendly)
+        reranker_model = FlashrankRerank(model="ms-marco-TinyBERT-L-2-v2") # Fast and efficient
+        self.compression_retriever = ContextualCompressionRetriever(
+            base_compressor=reranker_model, 
+            base_retriever=self.ensemble_retriever
         )
             
         # Create QA Chain
@@ -332,6 +350,16 @@ Eğer bağlamda cevap yoksa yalnızca şunu yaz:
 "Anayasanın hafızama yüklenen ilgili maddelerinde bu konuda bir bilgi bulunmamaktadır."
 
 ────────────────────────────────────
+## XIII. ALINTI VE KAYNAK KULLANIMI (KRİTİK)
+
+Model, cevabını oluştururken mutlaka şu kurala uymalıdır:
+- Her cevabın altında [DOĞRULANMIŞ ALINTI] başlığı açmalı.
+- Bu başlık altında, bağlamdan alınan ve cevabı destekleyen **en az bir cümleyi hiçbir değişiklik yapmadan (copy-paste)** tırnak içinde yazmalıdır.
+- Eğer birden fazla madde kullanılıyorsa, her madde için ayrı alıntı verilmelidir.
+
+Bu alıntılar, sistem tarafından programatik olarak doğrulanacaktır. Eğer alıntı orijinal metinle birebir eşleşmezse cevap iptal edilecektir.
+
+────────────────────────────────────
 ## XII. UZUNLUK VE KAPSAM KURALI
 
 - Kısa soruya gereksiz uzun cevap verme.
@@ -450,30 +478,11 @@ EMİN DEĞİLSEN YAZMA
         
         PROMPT = ChatPromptTemplate.from_messages([system_message_prompt, human_message_prompt])
         
-        def format_docs(docs):
-            formatted = []
-            seen_articles = set()
-            for doc in docs:
-                m_id = doc.metadata.get('id', 'Bilinmiyor')
-                if m_id in seen_articles:
-                    continue
-                seen_articles.add(m_id)
-                if len(seen_articles) > 3:
-                    break
-                    
-                m_title = doc.metadata.get('title', 'Bilinmiyor')
-                # Format each piece as requested JSON structure
-                chunk = {
-                    "madde_no": str(m_id),
-                    "baslik": m_title,
-                    "metin": doc.page_content
-                }
-                formatted.append(json.dumps(chunk, ensure_ascii=False))
-            return "\n\n".join(formatted)
+        
 
         self.qa_chain = (
             {
-                "context": (lambda x: x["context_query"]) | self.ensemble_retriever | format_docs,
+                "context": (lambda x: x["context_query"]) | self.compression_retriever | self._format_retrieved_docs,
                 "question": (lambda x: x["actual_question"])
             }
             | PROMPT
@@ -570,46 +579,79 @@ BAĞLAM:
             expanded_query = self.expansion_chain.invoke({"question": query})
             context_query = f"{query} {expanded_query}"
             
-            # 2. Retrieve Docs
-            docs = self.ensemble_retriever.invoke(context_query)
+            # 2. Retrieve Docs with Expert Reranking
+            docs = self.compression_retriever.invoke(context_query)
             
-            # Use format_docs directly to get the 1-3 article JSONs
-            # Note: format_docs is a local function in __init__ in the original code, 
-            # I should move it to a method if I want to use it here or re-define it.
-            # However, I'll update the QA chain to pass the docs through.
-            
-            # Let's reconstruct the QA invocation to be more explicit for validation
+            # 3. Format Context for LLM
             formatted_context = self._format_retrieved_docs(docs)
             
-            # 3. Get Main Answer
+            # 4. Get Main Answer
             answer = self.qa_chain.invoke({
                 "context_query": context_query, 
                 "actual_question": query
             })
             
-            # 4. Validate Answer
+            # 5. Citation Verification (Programmatic)
+            verified_answer = self._verify_citations(answer, docs)
+            
+            # 6. Validate Answer via LLM
             validation_result = self.validator_chain.invoke({
-                "answer": answer,
+                "answer": verified_answer,
                 "context": formatted_context
             })
             
-            # Log validation (could be used to filter or retry, but for now we'll append it)
-            # The user might want the validation result visible or just for internal safety.
-            # Based on "İstersen ana cevaptan sonra ayrı bir doğrulayıcı modele şunu sor", 
-            # I'll include it in a hidden or distinct way if needed, 
-            # but usually, these systems just show the final answer if valid.
-            # I'll append it as a "Doğrulama Notu" if there are issues.
-            
+            # 7. Self-Correction Loop (Max 1 Retry)
             if "evet" in validation_result.lower():
-                # If validator finds issues, we could return a "not found" or specific warning.
-                # The user wants "minimal + correct".
-                # If there's a minor error, appending it is better than staying quiet if it violates context.
-                validation_header = "\n\n🔍 **Doğrulama Analizi:**\n"
-                return answer + validation_header + validation_result
+                # Hata bulundu, yapay zekadan düzeltme isteyelim
+                correction_prompt = f"{query}\n\n[SİSTEM UYARISI: Önceki cevabında eksik veya hatalı kısımlar bulundu: {validation_result}. Lütfen sadece geçerli bağlamı kullanarak, kurallara birebir uyacak şekilde cevabını düzelt.]"
+                
+                answer_retry = self.qa_chain.invoke({
+                    "context_query": context_query,
+                    "actual_question": correction_prompt
+                })
+                
+                # Yeni cevabı tekrar kontrol et
+                verified_answer_retry = self._verify_citations(answer_retry, docs)
+                validation_result_retry = self.validator_chain.invoke({
+                    "answer": verified_answer_retry,
+                    "context": formatted_context
+                })
+                
+                # İkinci deneme de başarısız ise güvenli yanıt dön
+                if "evet" in validation_result_retry.lower():
+                    return "Bu sorunuza Anayasamızdaki veriler ışığında, kurallarım gereği kesin ve güvenli bir cevap veremiyorum. Lütfen sorunuzu daha spesifik hale getiriniz."
+                
+                return verified_answer_retry
             
-            return answer
+            return verified_answer
         except Exception as e:
-            return f"Bir hata oluştu: {str(e)}"
+            raise ConstitutionalError("RAG yanıtı üretilirken hata oluştu.") from e
+
+    def _verify_citations(self, answer: str, docs: list) -> str:
+        """
+        Programmatically verify that quotes in the answer exist in the retrieved docs.
+        """
+        # Extract quotes between double quotes
+        quotes = re.findall(r'\"(.*?)\"', answer)
+        if not quotes:
+            return answer # No quotes to verify
+            
+        context_text = " ".join([doc.page_content for doc in docs])
+        
+        verification_failed = False
+        failed_quotes = []
+        
+        for quote in quotes:
+            # Clean quote for robust matching (optional, here we stay strict)
+            if quote.strip() and quote.strip() not in context_text:
+                verification_failed = True
+                failed_quotes.append(quote)
+        
+        if verification_failed:
+            warning = f"\n\n🚨 **DİKKAT:** Model tarafından verilen bazı alıntılar kaynak metinde birebir bulunamadı: {', '.join(failed_quotes)}. Lütfen bu bilgiyi teyit ediniz."
+            return answer + warning
+            
+        return answer
 
     def _format_retrieved_docs(self, docs):
         formatted = []

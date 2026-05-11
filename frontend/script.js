@@ -22,8 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appendMessage('user', text);
         userInput.value = '';
         
-        // Show loader
-        loader.classList.remove('hidden');
+        setLoading(true);
         chatBox.scrollTop = chatBox.scrollHeight;
 
         try {
@@ -38,16 +37,31 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                throw new Error('Sunucu ile iletişim kurulamadı.');
+                throw new Error(await getErrorMessage(response));
             }
 
             const data = await response.json();
-            loader.classList.add('hidden');
             appendMessage('bot', data.answer);
         } catch (error) {
-            loader.classList.add('hidden');
             appendMessage('bot', `Hata: ${error.message} - Sistem şu anda çevrimdışı veya yükleniyor olabilir.`);
+        } finally {
+            setLoading(false);
         }
+    }
+
+    async function getErrorMessage(response) {
+        try {
+            const data = await response.json();
+            return data?.error?.message || 'Sunucu ile iletişim kurulamadı.';
+        } catch (_) {
+            return 'Sunucu ile iletişim kurulamadı.';
+        }
+    }
+
+    function setLoading(isLoading) {
+        loader.classList.toggle('hidden', !isLoading);
+        sendBtn.disabled = isLoading;
+        userInput.disabled = isLoading;
     }
 
     function appendMessage(sender, text) {
