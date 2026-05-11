@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anayasa AI | Akıllı Asistan</title>
-    <!-- Google Fonts for Modern Typography -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,16 +12,16 @@
             <div class="logo-container">
                 <h1>Anayasa AI</h1>
             </div>
-            <p class="subtitle">Türkiye Cumhuriyeti Anayasası Yasal Asistanı (2026)</p>
+            <p class="subtitle">Türkiye Cumhuriyeti Anayasası için RAG asistanı</p>
         </header>
 
         <main class="chat-container">
-            <div id="chat-box" class="chat-box">
+            <div id="chat-box" class="chat-box" role="log" aria-live="polite" aria-label="Sohbet geçmişi">
                 <!-- Initial Assistant Message -->
                 <div class="message assistant">
                     <div class="avatar">AI</div>
                     <div class="msg-content">
-                        Merhaba, ben Anayasa AI. Sana güncel (2026) Türkiye Cumhuriyeti Anayasası maddelerine göre yol göstermek için buradayım. Bana ne sormak istersin?
+                        Türkiye Cumhuriyeti Anayasası hakkında sorunuzu yazabilirsiniz.
                     </div>
                 </div>
             </div>
@@ -36,9 +34,9 @@
             </div>
 
             <div class="input-container">
-                <textarea id="user-input" placeholder="Anayasa hakkında bir soru sorun..." rows="1"></textarea>
-                <button id="send-btn" title="Gönder">
-                    <svg viewBox="0 0 24 24" width="24" height="24">
+                <textarea id="user-input" aria-label="Anayasa sorusu" placeholder="Anayasa hakkında bir soru sorun..." rows="1"></textarea>
+                <button id="send-btn" title="Gönder" aria-label="Soruyu gönder">
+                    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
                         <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
                     </svg>
                 </button>
