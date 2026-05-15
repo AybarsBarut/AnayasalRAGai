@@ -224,6 +224,70 @@ h1 {
     margin-top: 0;
 }
 
+.guardrail-panel {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.48;
+}
+
+.confidence-badge {
+    width: fit-content;
+    margin-bottom: 10px;
+    padding: 4px 7px;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.confidence-verified {
+    background: #e8f2e6;
+}
+
+.confidence-source_grounded {
+    background: #edf0f4;
+}
+
+.confidence-needs_review {
+    background: #fff2d8;
+}
+
+.citation-list {
+    display: grid;
+    gap: 8px;
+}
+
+.citation-item {
+    border-left: 2px solid var(--border-strong);
+    padding-left: 10px;
+}
+
+.citation-item summary {
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.citation-item p {
+    margin: 8px 0 0;
+    color: var(--text-muted);
+}
+
+.review-notes {
+    margin-top: 10px;
+    margin-bottom: 0;
+    padding-left: 18px;
+}
+
+.review-notes li {
+    margin-bottom: 4px;
+}
+
 .loader-container {
     padding: 0 28px 16px 76px;
     display: flex;

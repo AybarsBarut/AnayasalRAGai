@@ -41,7 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
-            appendMessage('bot', data.answer);
+            appendMessage('bot', data.answer, {
+                confidence: data.confidence,
+                citations: data.citations || [],
+                reviewNotes: data.review_notes || []
+            });
         } catch (error) {
             appendMessage('bot', `Hata: ${error.message} - Sistem şu anda çevrimdışı veya yükleniyor olabilir.`);
         } finally {
@@ -64,7 +68,69 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = isLoading;
     }
 
-    function appendMessage(sender, text) {
+    function confidenceLabel(confidence) {
+        const labels = {
+            verified: 'Alıntı doğrulandı',
+            source_grounded: 'Kaynaklı yanıt',
+            needs_review: 'Kontrol gerekli'
+        };
+        return labels[confidence] || labels.needs_review;
+    }
+
+    function appendGuardrailMetadata(container, meta = {}) {
+        const hasCitations = Array.isArray(meta.citations) && meta.citations.length > 0;
+        const hasNotes = Array.isArray(meta.reviewNotes) && meta.reviewNotes.length > 0;
+        if (!meta.confidence && !hasCitations && !hasNotes) return;
+
+        const panel = document.createElement('div');
+        panel.className = 'guardrail-panel';
+
+        if (meta.confidence) {
+            const badge = document.createElement('div');
+            badge.className = `confidence-badge confidence-${meta.confidence}`;
+            badge.textContent = confidenceLabel(meta.confidence);
+            panel.appendChild(badge);
+        }
+
+        if (hasCitations) {
+            const citations = document.createElement('div');
+            citations.className = 'citation-list';
+
+            meta.citations.forEach((citation) => {
+                const item = document.createElement('details');
+                item.className = 'citation-item';
+
+                const summary = document.createElement('summary');
+                summary.textContent = `${citation.title || 'Kaynak'} (${citation.source || 'constitution.json'})`;
+
+                const excerpt = document.createElement('p');
+                excerpt.textContent = citation.excerpt || '';
+
+                item.appendChild(summary);
+                item.appendChild(excerpt);
+                citations.appendChild(item);
+            });
+
+            panel.appendChild(citations);
+        }
+
+        if (hasNotes) {
+            const notes = document.createElement('ul');
+            notes.className = 'review-notes';
+
+            meta.reviewNotes.slice(0, 3).forEach((note) => {
+                const item = document.createElement('li');
+                item.textContent = note;
+                notes.appendChild(item);
+            });
+
+            panel.appendChild(notes);
+        }
+
+        container.appendChild(panel);
+    }
+
+    function appendMessage(sender, text, meta = {}) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${sender}`;
         
@@ -78,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sender === 'bot') {
             // Parse Markdown for bot responses (requires marked.js included in HTML)
             content.innerHTML = marked.parse(text);
+            appendGuardrailMetadata(content, meta);
         } else {
             // Raw text for user
             content.innerText = text;

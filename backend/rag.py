@@ -574,6 +574,9 @@ BAĞLAM:
         return vector_db, bm25_retriever
 
     def interact(self, query: str) -> str:
+        return self.interact_with_metadata(query)["answer"]
+
+    def interact_with_metadata(self, query: str) -> dict:
         try:
             # 1. Expand Query to improve retrieval coverage
             expanded_query = self.expansion_chain.invoke({"question": query})
@@ -581,6 +584,7 @@ BAĞLAM:
             
             # 2. Retrieve Docs with Expert Reranking
             docs = self.compression_retriever.invoke(context_query)
+            citations = self._build_citations(docs)
             
             # 3. Format Context for LLM
             formatted_context = self._format_retrieved_docs(docs)
@@ -592,7 +596,7 @@ BAĞLAM:
             })
             
             # 5. Citation Verification (Programmatic)
-            verified_answer = self._verify_citations(answer, docs)
+            verified_answer, failed_quotes = self._verify_citations(answer, docs)
             
             # 6. Validate Answer via LLM
             validation_result = self.validator_chain.invoke({
@@ -601,7 +605,7 @@ BAĞLAM:
             })
             
             # 7. Self-Correction Loop (Max 1 Retry)
-            if "evet" in validation_result.lower():
+            if self._validation_has_blocking_issue(validation_result):
                 # Hata bulundu, yapay zekadan düzeltme isteyelim
                 correction_prompt = f"{query}\n\n[SİSTEM UYARISI: Önceki cevabında eksik veya hatalı kısımlar bulundu: {validation_result}. Lütfen sadece geçerli bağlamı kullanarak, kurallara birebir uyacak şekilde cevabını düzelt.]"
                 
@@ -611,30 +615,69 @@ BAĞLAM:
                 })
                 
                 # Yeni cevabı tekrar kontrol et
-                verified_answer_retry = self._verify_citations(answer_retry, docs)
+                verified_answer_retry, failed_quotes_retry = self._verify_citations(answer_retry, docs)
                 validation_result_retry = self.validator_chain.invoke({
                     "answer": verified_answer_retry,
                     "context": formatted_context
                 })
                 
                 # İkinci deneme de başarısız ise güvenli yanıt dön
-                if "evet" in validation_result_retry.lower():
-                    return "Bu sorunuza Anayasamızdaki veriler ışığında, kurallarım gereği kesin ve güvenli bir cevap veremiyorum. Lütfen sorunuzu daha spesifik hale getiriniz."
+                if self._validation_has_blocking_issue(validation_result_retry):
+                    return {
+                        "answer": "Bu sorunuza Anayasamızdaki veriler ışığında, kurallarım gereği kesin ve güvenli bir cevap veremiyorum. Lütfen sorunuzu daha spesifik hale getiriniz.",
+                        "confidence": "needs_review",
+                        "citations": citations,
+                        "review_notes": self._build_review_notes(
+                            failed_quotes_retry,
+                            validation_result_retry,
+                            confidence="needs_review",
+                        ),
+                    }
                 
-                return verified_answer_retry
+                retry_confidence = self._confidence_for_answer(
+                    verified_answer_retry,
+                    citations,
+                    failed_quotes_retry,
+                    validation_result_retry,
+                )
+                return {
+                    "answer": verified_answer_retry,
+                    "confidence": retry_confidence,
+                    "citations": citations,
+                    "review_notes": self._build_review_notes(
+                        failed_quotes_retry,
+                        validation_result_retry,
+                        confidence=retry_confidence,
+                    ),
+                }
             
-            return verified_answer
+            confidence = self._confidence_for_answer(
+                verified_answer,
+                citations,
+                failed_quotes,
+                validation_result,
+            )
+            return {
+                "answer": verified_answer,
+                "confidence": confidence,
+                "citations": citations,
+                "review_notes": self._build_review_notes(
+                    failed_quotes,
+                    validation_result,
+                    confidence=confidence,
+                ),
+            }
         except Exception as e:
             raise ConstitutionalError("RAG yanıtı üretilirken hata oluştu.") from e
 
-    def _verify_citations(self, answer: str, docs: list) -> str:
+    def _verify_citations(self, answer: str, docs: list) -> tuple[str, list[str]]:
         """
         Programmatically verify that quotes in the answer exist in the retrieved docs.
         """
         # Extract quotes between double quotes
         quotes = re.findall(r'\"(.*?)\"', answer)
         if not quotes:
-            return answer # No quotes to verify
+            return answer, []
             
         context_text = " ".join([doc.page_content for doc in docs])
         
@@ -649,9 +692,89 @@ BAĞLAM:
         
         if verification_failed:
             warning = f"\n\n🚨 **DİKKAT:** Model tarafından verilen bazı alıntılar kaynak metinde birebir bulunamadı: {', '.join(failed_quotes)}. Lütfen bu bilgiyi teyit ediniz."
-            return answer + warning
+            return answer + warning, failed_quotes
             
-        return answer
+        return answer, []
+
+    def _build_citations(self, docs: list) -> list[dict]:
+        citations = []
+        seen = set()
+
+        for doc in docs[:5]:
+            metadata = getattr(doc, "metadata", {}) or {}
+            article_id = str(metadata.get("id", "Bilinmiyor"))
+            paragraph_index = metadata.get("para_index")
+            page_content = re.sub(r"\s+", " ", getattr(doc, "page_content", "")).strip()
+            if not page_content:
+                continue
+
+            key = (article_id, paragraph_index, page_content)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            if len(page_content) > 700:
+                page_content = f"{page_content[:697]}..."
+
+            citations.append(
+                {
+                    "article_id": article_id,
+                    "title": str(metadata.get("title", f"Madde {article_id}")),
+                    "paragraph_index": paragraph_index if isinstance(paragraph_index, int) else None,
+                    "excerpt": page_content,
+                    "source": "constitution.json",
+                }
+            )
+
+        return citations
+
+    def _validation_has_blocking_issue(self, validation_result: str) -> bool:
+        fields = ("bağlam_dışı_bilgi", "yanlış_madde", "uydurma_ifade", "aşırı_yorum")
+        for field in fields:
+            if re.search(rf"{field}\s*:\s*evet\b", validation_result, re.IGNORECASE):
+                return True
+        return False
+
+    def _confidence_for_answer(
+        self,
+        answer: str,
+        citations: list[dict],
+        failed_quotes: list[str],
+        validation_result: str,
+    ) -> str:
+        if failed_quotes or self._validation_has_blocking_issue(validation_result) or not citations:
+            return "needs_review"
+        if re.findall(r'\"(.*?)\"', answer):
+            return "verified"
+        return "source_grounded"
+
+    def _build_review_notes(
+        self,
+        failed_quotes: list[str],
+        validation_result: str,
+        *,
+        confidence: str,
+    ) -> list[str]:
+        notes = []
+
+        if confidence == "verified":
+            notes.append("Modelin tırnak içi alıntıları getirilen bağlamda birebir doğrulandı.")
+        elif confidence == "source_grounded":
+            notes.append("Yanıt getirilen anayasa parçalarıyla destekleniyor; tırnak içi birebir alıntı yoksa resmi metinle kontrol edin.")
+        else:
+            notes.append("Yanıt ek kontrol gerektiriyor; doğrulama veya validator katmanı risk işareti verdi.")
+
+        if failed_quotes:
+            compact = ", ".join(quote[:120] for quote in failed_quotes[:3])
+            notes.append(f"Birebir eşleşmeyen alıntılar: {compact}")
+
+        if validation_result:
+            normalized = re.sub(r"\s+", " ", validation_result).strip()
+            if len(normalized) > 240:
+                normalized = f"{normalized[:237]}..."
+            notes.append(f"Validator özeti: {normalized}")
+
+        return notes
 
     def _format_retrieved_docs(self, docs):
         formatted = []

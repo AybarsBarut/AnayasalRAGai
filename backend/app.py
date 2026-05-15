@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import logging
 import os
 import time
+from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -24,6 +25,11 @@ LEGAL_DISCLAIMER = (
     "\n\n---\n"
     "**Yasal Uyarı:** Bu yanıt yasal tavsiye değildir. "
     "Resmî ve bağlayıcı bilgi için güncel mevzuat ve yetkili profesyonel kaynaklar kontrol edilmelidir."
+)
+
+VALID_CONFIDENCE_LEVELS = {"verified", "source_grounded", "needs_review"}
+DEFAULT_REVIEW_NOTE = (
+    "Bu çıktı karar veya hukuki görüş değil; madde metni üzerinden insan denetimi gerektirir."
 )
 
 
@@ -182,6 +188,35 @@ def append_legal_disclaimer(answer: str) -> str:
     return f"{answer}{LEGAL_DISCLAIMER}"
 
 
+def build_chat_payload(rag: Any, query: str) -> dict[str, Any]:
+    if hasattr(rag, "interact_with_metadata"):
+        payload = rag.interact_with_metadata(query)
+    else:
+        payload = {"answer": rag.interact(query)}
+
+    if isinstance(payload, str):
+        payload = {"answer": payload}
+
+    answer = str(payload.get("answer", "")).strip()
+    citations = payload.get("citations") or []
+    confidence = payload.get("confidence") or ("source_grounded" if citations else "needs_review")
+    if confidence not in VALID_CONFIDENCE_LEVELS:
+        confidence = "needs_review"
+
+    review_notes = list(payload.get("review_notes") or [])
+    if DEFAULT_REVIEW_NOTE not in review_notes:
+        review_notes.insert(0, DEFAULT_REVIEW_NOTE)
+    if not citations:
+        review_notes.append("Kaynak parçası döndürülmedi; cevabı resmî metinle ayrıca karşılaştırın.")
+
+    return {
+        "answer": answer,
+        "confidence": confidence,
+        "citations": citations,
+        "review_notes": review_notes,
+    }
+
+
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health():
     return HealthResponse(
@@ -213,14 +248,21 @@ async def chat(chat_request: ChatRequest, request: Request):
     await verify_api_key(request, settings)
     query = sanitize_query(chat_request.query, settings)
     rag = get_rag_system()
-    answer = rag.interact(query)
+    payload = build_chat_payload(rag, query)
+    answer = payload["answer"]
 
     if not answer or not answer.strip():
         raise ConstitutionalError("RAG sistemi boş yanıt döndürdü.")
 
     request_id = getattr(request.state, "request_id", str(uuid4()))
     logger.info("chat_completed request_id=%s query_length=%s", request_id, len(query))
-    return ChatResponse(answer=append_legal_disclaimer(answer), request_id=request_id)
+    return ChatResponse(
+        answer=append_legal_disclaimer(answer),
+        request_id=request_id,
+        confidence=payload["confidence"],
+        citations=payload["citations"],
+        review_notes=payload["review_notes"],
+    )
 
 # Mount the frontend directory to serve static files
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))

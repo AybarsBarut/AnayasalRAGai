@@ -17,6 +17,7 @@ Bu proje yasal tavsiye üretmez. Yanıtlar yapay zeka tarafından oluşturulur v
 - Structured Markdown and JSON legal data for machine-readable workflows.
 - FastAPI backend foundation for legal question answering.
 - Prompting strategy designed to stay close to the source context.
+- Structured source citations, confidence labels, and reviewer notes inspired by legal AI guardrail workflows.
 - Useful reference project for Turkish NLP, legal AI, and retrieval pipelines.
 - Pydantic request validation, structured JSON hata formatı ve request ID takibi.
 - Rate limiting, CORS yapılandırması, opsiyonel API key ve temel prompt injection filtresi.
@@ -88,7 +89,7 @@ API dokümantasyonu:
 
 ### `POST /api/v1/chat`
 
-Geriye `answer` ve `request_id` döndürür. Eski frontend uyumluluğu için `POST /chat` de aynı endpoint olarak korunur.
+Geriye `answer`, `request_id`, kaynak parçaları ve review metadata döndürür. Eski frontend uyumluluğu için `POST /chat` de aynı endpoint olarak korunur.
 
 ```json
 {
@@ -101,9 +102,28 @@ Başarılı response:
 ```json
 {
   "answer": "...",
-  "request_id": "..."
+  "request_id": "...",
+  "confidence": "source_grounded",
+  "citations": [
+    {
+      "article_id": "1",
+      "title": "Madde 1",
+      "excerpt": "Madde 1, Fıkra 1: Türkiye Devleti bir Cumhuriyettir.",
+      "paragraph_index": 0,
+      "source": "constitution.json"
+    }
+  ],
+  "review_notes": [
+    "Bu çıktı karar veya hukuki görüş değil; madde metni üzerinden insan denetimi gerektirir."
+  ]
 }
 ```
+
+`confidence` değerleri:
+
+- `verified`: Modelin tırnak içi alıntıları getirilen bağlamda birebir doğrulanmıştır.
+- `source_grounded`: Yanıt kaynak parçalarıyla desteklenmiştir ancak birebir alıntı doğrulaması yoktur.
+- `needs_review`: Yanıt veya kaynak eşleşmesi ek kontrol gerektirir.
 
 Hata response formatı:
 
@@ -181,7 +201,7 @@ ChromaDB verisi `data/` altında tutulur. Production kullanımında bu dizin dü
 - Redis cache ve response time metrikleri.
 - Kalıcı ChromaDB backup ve migration scriptleri.
 - Prometheus metrikleri ve query analytics.
-- Multi-turn conversation ve daha ayrıntılı citation doğrulama.
+- Multi-turn conversation, madde geçmişçesi ve daha ayrıntılı citation doğrulama.
 - Docker Compose ve production deployment otomasyonu.
 
 ## SEO Keywords
