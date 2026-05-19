@@ -1,0 +1,20 @@
+[
+  {
+    "id": "article_1",
+    "query": "Anayasa'nın 1. maddesi nedir?",
+    "required_terms": ["Cumhuriyet"],
+    "min_citations": 1
+  },
+  {
+    "id": "capital_city",
+    "query": "Anayasa'ya göre başkent neresidir?",
+    "required_terms": ["Ankara"],
+    "min_citations": 1
+  },
+  {
+    "id": "unchangeable_rules",
+    "query": "Anayasa'da değiştirilemeyecek hükümler nelerdir?",
+    "required_terms": ["değiştirilemez", "Madde 4"],
+    "min_citations": 1
+  }
+]

@@ -11,11 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.analysis import (
+    analysis_status,
+    build_analysis_query,
+    detect_risk_signals,
+    risk_level_from_signals,
+)
 from backend.config import get_settings
 from backend.exceptions import ConstitutionalError, error_payload
 from backend.logging_config import configure_logging
-from backend.schemas import ChatRequest, ChatResponse, HealthResponse
-from backend.security import SecurityMiddleware, sanitize_query, verify_api_key
+from backend.schemas import AnalysisRequest, AnalysisResponse, ChatRequest, ChatResponse, HealthResponse
+from backend.security import SecurityMiddleware, sanitize_analysis_text, sanitize_query, sanitize_text, verify_api_key
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -31,6 +37,8 @@ VALID_CONFIDENCE_LEVELS = {"verified", "source_grounded", "needs_review"}
 DEFAULT_REVIEW_NOTE = (
     "Bu çıktı karar veya hukuki görüş değil; madde metni üzerinden insan denetimi gerektirir."
 )
+APP_STARTED_AT = time.time()
+REQUEST_METRICS = {"chat": 0, "analysis": 0}
 
 
 @asynccontextmanager
@@ -217,6 +225,60 @@ def build_chat_payload(rag: Any, query: str) -> dict[str, Any]:
     }
 
 
+def build_analysis_payload(rag: Any, subject: str, description: str, mode: str) -> dict[str, Any]:
+    signals = detect_risk_signals(f"{subject}\n{description}")
+
+    if hasattr(rag, "analyze_with_metadata"):
+        payload = rag.analyze_with_metadata(
+            subject=subject,
+            description=description,
+            mode=mode,
+            signals=signals,
+        )
+    else:
+        analysis_query = build_analysis_query(subject, description, mode)
+        if hasattr(rag, "interact_with_metadata"):
+            payload = rag.interact_with_metadata(analysis_query)
+        else:
+            payload = {"answer": rag.interact(analysis_query)}
+
+    if isinstance(payload, str):
+        payload = {"answer": payload}
+
+    answer = str(payload.get("answer", "")).strip()
+    citations = payload.get("citations") or []
+    confidence = payload.get("confidence") or ("source_grounded" if citations else "needs_review")
+    if confidence not in VALID_CONFIDENCE_LEVELS:
+        confidence = "needs_review"
+
+    response_signals = payload.get("signals") or signals
+    risk_level = payload.get("risk_level") or risk_level_from_signals(response_signals, confidence, citations)
+    if risk_level not in {"low", "medium", "high", "critical"}:
+        risk_level = "high" if confidence == "needs_review" else "medium"
+
+    status_label = payload.get("status") or analysis_status(risk_level, confidence, citations)
+    if status_label not in {"no_clear_issue", "review_recommended", "high_risk", "needs_review"}:
+        status_label = "needs_review"
+
+    review_notes = list(payload.get("review_notes") or [])
+    if DEFAULT_REVIEW_NOTE not in review_notes:
+        review_notes.insert(0, DEFAULT_REVIEW_NOTE)
+    if not citations:
+        review_notes.append("Analiz için kaynak parçası döndürülmedi; resmi metinle ayrıca kontrol gerekir.")
+    if response_signals:
+        review_notes.append("Otomatik sinyal katmanı, metindeki anayasal risk temalarını ayrıca işaretledi.")
+
+    return {
+        "answer": answer,
+        "confidence": confidence,
+        "status": status_label,
+        "risk_level": risk_level,
+        "signals": response_signals,
+        "citations": citations,
+        "review_notes": review_notes,
+    }
+
+
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health():
     return HealthResponse(
@@ -224,6 +286,51 @@ async def health():
         version=settings.app_version,
         rag_loaded=rag_system is not None,
     )
+
+
+@app.get("/api/v1/capabilities", tags=["Health"])
+async def capabilities():
+    return {
+        "status": "ok",
+        "version": settings.app_version,
+        "features": [
+            {
+                "id": "chat",
+                "name": "Kaynaklı anayasa soru-cevap",
+                "endpoint": "/api/v1/chat",
+                "max_length": settings.query_max_length,
+            },
+            {
+                "id": "constitutional_analysis",
+                "name": "Anayasal uyumluluk ve risk incelemesi",
+                "endpoint": "/api/v1/analyze",
+                "max_length": settings.analysis_max_length,
+            },
+        ],
+        "guardrails": {
+            "prompt_injection_filter": True,
+            "citations": True,
+            "human_review_notes": True,
+            "legal_advice_disclaimer": True,
+        },
+    }
+
+
+@app.get("/api/v1/statistics", tags=["Health"])
+async def statistics():
+    return {
+        "status": "ok",
+        "version": settings.app_version,
+        "uptime_seconds": round(time.time() - APP_STARTED_AT, 3),
+        "rag_loaded": rag_system is not None,
+        "requests": dict(REQUEST_METRICS),
+        "limits": {
+            "query_max_length": settings.query_max_length,
+            "analysis_max_length": settings.analysis_max_length,
+            "rate_limit_requests": settings.rate_limit_requests,
+            "rate_limit_window_seconds": settings.rate_limit_window_seconds,
+        },
+    }
 
 
 @app.get("/api/health/models", tags=["Health"])
@@ -255,11 +362,54 @@ async def chat(chat_request: ChatRequest, request: Request):
         raise ConstitutionalError("RAG sistemi boş yanıt döndürdü.")
 
     request_id = getattr(request.state, "request_id", str(uuid4()))
+    REQUEST_METRICS["chat"] += 1
     logger.info("chat_completed request_id=%s query_length=%s", request_id, len(query))
     return ChatResponse(
         answer=append_legal_disclaimer(answer),
         request_id=request_id,
         confidence=payload["confidence"],
+        citations=payload["citations"],
+        review_notes=payload["review_notes"],
+    )
+
+
+@app.post("/api/v1/analyze", response_model=AnalysisResponse, tags=["Analysis"])
+@app.post("/analyze", response_model=AnalysisResponse, tags=["Analysis"])
+async def analyze(analysis_request: AnalysisRequest, request: Request):
+    """
+    Politika, taslak metin veya olay anlatimini anayasa baglaminda kaynakli risk incelemesine tabi tutar.
+    """
+    await verify_api_key(request, settings)
+    subject = sanitize_text(
+        analysis_request.subject,
+        min_length=3,
+        max_length=160,
+        too_short_message="Inceleme basligi cok kisa.",
+        too_long_message="Inceleme basligi izin verilen uzunlugu asiyor.",
+    )
+    description = sanitize_analysis_text(analysis_request.description, settings)
+    rag = get_rag_system()
+    payload = build_analysis_payload(rag, subject, description, analysis_request.mode)
+    answer = payload["answer"]
+
+    if not answer or not answer.strip():
+        raise ConstitutionalError("RAG sistemi bos analiz yaniti dondurdu.")
+
+    request_id = getattr(request.state, "request_id", str(uuid4()))
+    REQUEST_METRICS["analysis"] += 1
+    logger.info(
+        "analysis_completed request_id=%s subject_length=%s description_length=%s",
+        request_id,
+        len(subject),
+        len(description),
+    )
+    return AnalysisResponse(
+        answer=append_legal_disclaimer(answer),
+        request_id=request_id,
+        confidence=payload["confidence"],
+        status=payload["status"],
+        risk_level=payload["risk_level"],
+        signals=payload["signals"],
         citations=payload["citations"],
         review_notes=payload["review_notes"],
     )

@@ -24,19 +24,26 @@ PROMPT_INJECTION_PATTERNS = (
 )
 
 
-def sanitize_query(query: str, settings: Settings) -> str:
-    cleaned = CONTROL_CHARS.sub(" ", query)
+def sanitize_text(
+    value: str,
+    *,
+    min_length: int,
+    max_length: int,
+    too_short_message: str,
+    too_long_message: str,
+) -> str:
+    cleaned = CONTROL_CHARS.sub(" ", value)
     cleaned = WHITESPACE.sub(" ", cleaned).strip()
 
-    if len(cleaned) < settings.query_min_length:
+    if len(cleaned) < min_length:
         raise ValidationError(
-            "Soru cok kisa.",
-            {"min_length": settings.query_min_length},
+            too_short_message,
+            {"min_length": min_length},
         )
-    if len(cleaned) > settings.query_max_length:
+    if len(cleaned) > max_length:
         raise ValidationError(
-            "Soru izin verilen uzunlugu asiyor.",
-            {"max_length": settings.query_max_length},
+            too_long_message,
+            {"max_length": max_length},
         )
 
     for pattern in PROMPT_INJECTION_PATTERNS:
@@ -44,6 +51,26 @@ def sanitize_query(query: str, settings: Settings) -> str:
             raise SecurityError("Soru guvenlik politikasi nedeniyle reddedildi.")
 
     return cleaned
+
+
+def sanitize_query(query: str, settings: Settings) -> str:
+    return sanitize_text(
+        query,
+        min_length=settings.query_min_length,
+        max_length=settings.query_max_length,
+        too_short_message="Soru cok kisa.",
+        too_long_message="Soru izin verilen uzunlugu asiyor.",
+    )
+
+
+def sanitize_analysis_text(text: str, settings: Settings) -> str:
+    return sanitize_text(
+        text,
+        min_length=settings.analysis_min_length,
+        max_length=settings.analysis_max_length,
+        too_short_message="Inceleme metni cok kisa.",
+        too_long_message="Inceleme metni izin verilen uzunlugu asiyor.",
+    )
 
 
 async def verify_api_key(request: Request, settings: Settings) -> None:

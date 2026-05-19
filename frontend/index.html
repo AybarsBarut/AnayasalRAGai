@@ -12,16 +12,21 @@
             <div class="logo-container">
                 <h1>Anayasa AI</h1>
             </div>
-            <p class="subtitle">Türkiye Cumhuriyeti Anayasası için RAG asistanı</p>
+            <p class="subtitle">Kaynaklı anayasa soru-cevap ve uyumluluk inceleme asistanı</p>
         </header>
 
         <main class="chat-container">
+            <div class="mode-bar" role="tablist" aria-label="Çalışma modu">
+                <button class="mode-btn active" type="button" data-mode="chat" role="tab" aria-selected="true">Soru-Cevap</button>
+                <button class="mode-btn" type="button" data-mode="analysis" role="tab" aria-selected="false">Uyumluluk İncelemesi</button>
+            </div>
+
             <div id="chat-box" class="chat-box" role="log" aria-live="polite" aria-label="Sohbet geçmişi">
                 <!-- Initial Assistant Message -->
                 <div class="message assistant">
                     <div class="avatar">AI</div>
                     <div class="msg-content">
-                        Türkiye Cumhuriyeti Anayasası hakkında sorunuzu yazabilirsiniz.
+                        Türkiye Cumhuriyeti Anayasası hakkında sorunuzu yazabilir veya uyumluluk incelemesi moduna geçebilirsiniz.
                     </div>
                 </div>
             </div>
@@ -34,6 +39,7 @@
             </div>
 
             <div class="input-container">
+                <input id="analysis-subject" class="analysis-subject hidden" type="text" aria-label="İnceleme başlığı" placeholder="İnceleme başlığı">
                 <textarea id="user-input" aria-label="Anayasa sorusu" placeholder="Anayasa hakkında bir soru sorun..." rows="1"></textarea>
                 <button id="send-btn" title="Gönder" aria-label="Soruyu gönder">
                     <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">

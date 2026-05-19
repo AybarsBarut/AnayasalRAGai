@@ -19,7 +19,7 @@ def _bool(value: str | None, default: bool) -> bool:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("ANAYASA_APP_NAME", "Anayasa AI")
-    app_version: str = os.getenv("ANAYASA_APP_VERSION", "0.2.0")
+    app_version: str = os.getenv("ANAYASA_APP_VERSION", "0.3.0")
     environment: str = os.getenv("ANAYASA_ENV", "development")
     log_level: str = os.getenv("ANAYASA_LOG_LEVEL", "INFO")
 
@@ -42,6 +42,8 @@ class Settings:
 
     query_min_length: int = int(os.getenv("ANAYASA_QUERY_MIN_LENGTH", "3"))
     query_max_length: int = int(os.getenv("ANAYASA_QUERY_MAX_LENGTH", "1500"))
+    analysis_min_length: int = int(os.getenv("ANAYASA_ANALYSIS_MIN_LENGTH", "20"))
+    analysis_max_length: int = int(os.getenv("ANAYASA_ANALYSIS_MAX_LENGTH", "5000"))
 
     api_key: str | None = os.getenv("ANAYASA_API_KEY")
     eager_load_rag: bool = _bool(os.getenv("ANAYASA_EAGER_LOAD_RAG"), True)

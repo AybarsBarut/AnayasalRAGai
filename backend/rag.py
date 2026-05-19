@@ -25,8 +25,10 @@ import re
 
 try:
     from backend.exceptions import ConstitutionalError
+    from backend.analysis import analysis_status, risk_level_from_signals, signal_summary
 except ImportError:
     from exceptions import ConstitutionalError
+    from analysis import analysis_status, risk_level_from_signals, signal_summary
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "constitution.json")
 VECTOR_DB_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chroma_db_tr")
@@ -523,6 +525,47 @@ BAĞLAM:
 """
         self.validator_prompt = ChatPromptTemplate.from_template(validator_prompt_text)
         self.validator_chain = self.validator_prompt | self.llm | StrOutputParser()
+
+        analysis_prompt_text = """
+[SİSTEM TALİMATI]
+Sen yalnızca verilen Türkiye Cumhuriyeti Anayasası bağlamına dayanan bir anayasal uyumluluk inceleme motorusun.
+Hukuki tavsiye vermezsin, bağlam dışı bilgi eklemezsin, mevzuat veya içtihat uydurmazsın.
+Bağlam açık cevap vermiyorsa eksikliği açıkça belirtirsin.
+
+Çıktıyı Türkçe ve şu yapıda üret:
+
+### Kısa Değerlendirme
+Metnin anayasal açıdan hangi noktada dikkat gerektirdiğini 2-4 cümleyle yaz.
+
+### Risk Haritası
+- Her maddeyi yalnızca verilen bağlamdaki anayasa hükmüyle ilişkilendir.
+- Otomatik sinyallerde görünen temaları dikkate al, ama kaynakta dayanak yoksa kesin hüküm kurma.
+
+### Dayanak Maddeler
+- İlgili maddeleri madde numarasıyla ve kısa kaynak özetiyle belirt.
+
+### Eksik Bilgi
+- Karar verebilmek için metinde eksik olan olguları yaz.
+
+### Sonuç
+Tek cümlelik, kaynakla sınırlı ve insan denetimi gerektiren sonuç yaz.
+
+Her bölümde bağlam dışına çıkma.
+
+BAĞLAM:
+{context}
+
+OTOMATİK SİNYALLER:
+{signals}
+
+İNCELEME KONUSU:
+{subject}
+
+METİN:
+{description}
+"""
+        self.analysis_prompt = ChatPromptTemplate.from_template(analysis_prompt_text)
+        self.analysis_chain = self.analysis_prompt | self.llm | StrOutputParser()
         
         self.disclaimer = "\n\n⚠️ **Yasal Uyarı:** *Bu cevap bir yapay zeka tarafından üretilmiş olup hatalar veya eksik yorumlamalar içerebilir. Kesin, güncel ve bağlayıcı bilgi için lütfen Türkiye Cumhuriyeti resmî mevzuatını (Resmî Gazete) ve yetkili profesyonel mercileri (avukatlar vb.) referans alınız.*"
 
@@ -669,6 +712,78 @@ BAĞLAM:
             }
         except Exception as e:
             raise ConstitutionalError("RAG yanıtı üretilirken hata oluştu.") from e
+
+    def analyze_with_metadata(
+        self,
+        *,
+        subject: str,
+        description: str,
+        mode: str = "policy",
+        signals: list[dict] | None = None,
+    ) -> dict:
+        try:
+            mode_label = {
+                "policy": "politika veya idari işlem",
+                "draft_text": "taslak düzenleme",
+                "scenario": "somut olay",
+            }.get(mode, "metin")
+            analysis_query = (
+                f"{subject}\n\n{description}\n\n"
+                f"İnceleme türü: {mode_label}. "
+                "Anayasa bağlamında temel haklar, yetki, usul ve ölçülülük açısından incele."
+            )
+            expanded_query = self.expansion_chain.invoke({"question": analysis_query})
+            context_query = f"{analysis_query} {expanded_query}"
+            docs = self.compression_retriever.invoke(context_query)
+            citations = self._build_citations(docs)
+            formatted_context = self._format_retrieved_docs(docs)
+            signals = signals or []
+
+            answer = self.analysis_chain.invoke(
+                {
+                    "context": formatted_context,
+                    "signals": signal_summary(signals),
+                    "subject": subject,
+                    "description": description,
+                }
+            )
+            verified_answer, failed_quotes = self._verify_citations(answer, docs)
+            validation_result = self.validator_chain.invoke(
+                {
+                    "answer": verified_answer,
+                    "context": formatted_context,
+                }
+            )
+            confidence = self._confidence_for_answer(
+                verified_answer,
+                citations,
+                failed_quotes,
+                validation_result,
+            )
+            risk_level = risk_level_from_signals(signals, confidence, citations)
+            status = analysis_status(risk_level, confidence, citations)
+            review_notes = self._build_review_notes(
+                failed_quotes,
+                validation_result,
+                confidence=confidence,
+            )
+
+            if signals:
+                review_notes.append("Otomatik risk sinyalleri analiz istemine dahil edildi.")
+            if mode != "policy":
+                review_notes.append(f"İnceleme türü: {mode_label}.")
+
+            return {
+                "answer": verified_answer,
+                "confidence": confidence,
+                "status": status,
+                "risk_level": risk_level,
+                "signals": signals,
+                "citations": citations,
+                "review_notes": review_notes,
+            }
+        except Exception as e:
+            raise ConstitutionalError("Anayasal analiz üretilirken hata oluştu.") from e
 
     def _verify_citations(self, answer: str, docs: list) -> tuple[str, list[str]]:
         """
